@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Schwabe oder Bade? - Der JuLi-Test</title>
+  <style>
+    :root {
+      --julis-magenta: #E6007E;
+      --julis-yellow: #ffd500;
+      --font: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    body {
+      font-family: var(--font);
+      background-color: #fdfdfd;
+      color: var(--julis-magenta);
+      margin: 0;
+      padding: 0;
+    }
+
+    header {
+      background: var(--julis-magenta);
+      color: #FFED00;
+      padding: 1rem;
+      text-align: center;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 1.8rem;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 2rem auto;
+      padding: 1rem;
+    }
+
+    .question {
+      margin-bottom: 1.5rem;
+    }
+
+    .question p {
+      font-weight: bold;
+    }
+
+    .options label {
+      display: block;
+      margin: 0.2rem 0;
+      cursor: pointer;
+    }
+
+    button {
+      background: var(--julis-yellow);
+      color: var(--julis-magenta);
+      border: none;
+      padding: 0.75rem 1.5rem;
+      font-size: 1rem;
+      font-weight: bold;
+      cursor: pointer;
+      margin-top: 1rem;
+      border-radius: 1em;
+    }
+
+    #result {
+      margin-top: 2rem;
+      font-size: 1.2rem;
+      font-weight: bold;
+    }
+
+    .scale-container {
+  margin-top: 2rem;
+  text-align: center;
+}
+
+.scale-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.9rem;
+  margin-bottom: 0.5rem;
+  padding: 0 5px;
+}
+
+.scale-bar {
+  height: 20px;
+  background-color: #ddd;
+  border-radius: 10px;
+  overflow: hidden;
+  position: relative;
+}
+
+.scale-fill {
+  height: 100%;
+  width: 50%; /* wird dynamisch per JS gesetzt */
+  background: linear-gradient(to right, #f44336, #ffd500, #005bac);
+  transition: width 0.5s ease;
+}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Schwabe oder Bade? – Der JuLi-Persönlichkeitstest</h1>
+  </header>
+  <div class="container" id="quiz"></div>
+  <div class="container">
+    <button onclick="calculateResult()">Auswertung anzeigen</button>
+    <div id="result"></div>
+    <div class="scale-container" id="scaleContainer" style="display: none;">
+        <div class="scale-labels">
+          <span>Ganz klar Badener</span>
+          <span>Ausgewogen</span>
+          <span>Ganz klar Schwabe</span>
+        </div>
+        <div class="scale-bar">
+          <div class="scale-fill" id="scaleFill"></div>
+        </div>
+      </div>
+  </div>
+  
+
+  <script>
+    const questions = [
+      { text: "'Schaffe, schaffe, Häusle baue' ist mein Lebensmotto.", type: "schwabe" },
+      { text: "Ich spare an allen Ecken und Enden – Geiz ist schließlich geil.", type: "schwabe" },
+      { text: "Die Kehrwoche ist mir heilig: Sauberkeit rund ums Haus muss sein.", type: "schwabe" },
+      { text: "Spätzle und Maultaschen könnte ich jeden Tag essen – alles andere ist für mich Beilage.", type: "schwabe" },
+      { text: "Ich hänge an fast jedes Wort ein '-le' dran.", type: "schwabe" },
+      { text: "Ordnung muss sein: Bei mir hat jedes Ding seinen festen Platz.", type: "schwabe" },
+      { text: "Ich liebe laue Sommerabende bei einem Glas Weißwein.", type: "bade" },
+      { text: "Fasnacht ist für mich ein Höhepunkt des Jahres.", type: "bade" },
+      { text: "Ich genieße mein Leben gern in vollen Zügen – Arbeit darf nicht alles sein.", type: "bade" },
+      { text: "Ich genieße Lebensfreuden und bin immer locker drauf.", type: "bade" },
+      { text: "Ich bade lieber in der Sonne als im Terminkalender.", type: "bade" },
+      { text: "Ein gutes Viertele ist mir lieber als ein Sparkonto.", type: "bade" },
+      { text: "Zum Ausflug nehme ich lieber mein eigenes Vesper mit.", type: "schwabe" },
+      { text: "Für ein gutes Sonderangebot fahre ich auch mal 10 km Umweg.", type: "schwabe" },
+      { text: "Luxus brauche ich nicht – Hauptsache, es erfüllt seinen Zweck.", type: "schwabe" },
+      { text: "Urlaub im Ländle ist doch am schönsten.", type: "neutral" },
+      { text: "Ich verabschiede mich mit 'Ade', nicht mit 'Tschüss' oder 'Ciao'.", type: "bade" }
+    ];
+
+    const values = [2, 1, 0, -1, -2];
+
+    const container = document.getElementById('quiz');
+    questions.forEach((q, i) => {
+      const div = document.createElement('div');
+      div.className = 'question';
+      div.innerHTML = `<p>${i + 1}. ${q.text}</p>`;
+
+      const options = ['Trifft zu', 'Trifft eher zu', 'Weder noch', 'Trifft eher nicht zu', 'Trifft nicht zu'];
+      const group = document.createElement('div');
+      group.className = 'options';
+
+      options.forEach((text, idx) => {
+        const id = `q${i}_${idx}`;
+        group.innerHTML += `
+          <label><input type="radio" name="q${i}" value="${values[idx]}" data-type="${q.type}" id="${id}"> ${text}</label>
+        `;
+      });
+
+      div.appendChild(group);
+      container.appendChild(div);
+    });
+
+    function calculateResult() {
+      let score = 0;
+      const inputs = document.querySelectorAll('input[type="radio"]:checked');
+      inputs.forEach(input => {
+        let val = parseInt(input.value);
+        const type = input.getAttribute('data-type');
+        if (type === 'bade') val = val * -1;
+        if (type === 'neutral') val = 0;
+        score += val;
+      });
+
+      let resultText = '';
+      if (score >= 16) {
+        resultText = 'Ganz klar Schwabe – Schaffe, schaffe, bis zum Schluss!';
+      } else if (score >= 6) {
+        resultText = 'Tendenz zum Schwaben – Du hast das Häusle schon vor Augen.';
+      } else if (score >= -5) {
+        resultText = 'Ausgewogen – Du bist eine seltene Mischung aus Spätzle und Wein!';
+      } else if (score >= -15) {
+        resultText = 'Tendenz zum Badener – Lieber genießen als schaffe!';
+      } else {
+        resultText = 'Ganz klar Badener – Genussmensch mit Herz und Humor!';
+      }
+      document.getElementById("scaleContainer").style.display = "block";
+
+        // Skalenwert berechnen und setzen
+        const percent = ((score + 30) / 60) * 100;
+        document.getElementById("scaleFill").style.width = `${percent}%`;
+
+      document.getElementById('result').innerText = `Dein Ergebnis: ${resultText}`;
+    }
+  </script>
+</body>
+</html>
