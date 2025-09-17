@@ -8,6 +8,7 @@
     :root {
       --julis-magenta: #E6007E;
       --julis-yellow: #ffd500;
+      --julis-blue: #005bac;
       --font: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
 
@@ -26,10 +27,7 @@
       text-align: center;
     }
 
-    h1 {
-      margin: 0;
-      font-size: 1.8rem;
-    }
+    h1 { margin: 0; font-size: 1.8rem; }
 
     .container {
       max-width: 800px;
@@ -39,17 +37,15 @@
 
     .question {
       margin-bottom: 1.5rem;
+      background: #fff;
+      border: 1px solid #f2c500;
+      border-radius: 0.9em;
+      padding: 1rem;
     }
 
-    .question p {
-      font-weight: bold;
-    }
+    .question p { font-weight: bold; margin-top: 0; }
 
-    .options label {
-      display: block;
-      margin: 0.2rem 0;
-      cursor: pointer;
-    }
+    .options label { display: block; margin: 0.2rem 0; cursor: pointer; }
 
     button {
       background: var(--julis-yellow);
@@ -63,137 +59,387 @@
       border-radius: 1em;
     }
 
-    #result {
-      margin-top: 2rem;
-      font-size: 1.2rem;
-      font-weight: bold;
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    #result { margin-top: 1rem; font-size: 1.2rem; font-weight: bold; }
+
+    .scale-container { margin-top: 1.25rem; text-align: center; }
+    .scale-labels {
+      display: flex; justify-content: space-between;
+      font-size: 0.9rem; margin-bottom: 0.5rem; padding: 0 5px;
+    }
+    .scale-bar {
+      height: 20px; background-color: #ddd; border-radius: 10px;
+      overflow: hidden; position: relative;
+    }
+    .scale-fill {
+      height: 100%; width: 50%;
+      background: linear-gradient(to right, #f44336, #ffd500, #005bac);
+      transition: width 0.4s ease;
     }
 
-    .scale-container {
-  margin-top: 2rem;
-  text-align: center;
-}
+    .share-controls {
+      display: grid; grid-template-columns: 1fr 1fr auto;
+      gap: .5rem; align-items: center; margin-top: .75rem;
+    }
+    .share-controls select {
+      border: 2px solid var(--julis-magenta);
+      border-radius: 0.8em; padding: .5rem .75rem;
+      color: var(--julis-magenta); background: #fff;
+      font-weight: 600;
+    }
 
-.scale-labels {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.9rem;
-  margin-bottom: 0.5rem;
-  padding: 0 5px;
-}
-
-.scale-bar {
-  height: 20px;
-  background-color: #ddd;
-  border-radius: 10px;
-  overflow: hidden;
-  position: relative;
-}
-
-.scale-fill {
-  height: 100%;
-  width: 50%; /* wird dynamisch per JS gesetzt */
-  background: linear-gradient(to right, #f44336, #ffd500, #005bac);
-  transition: width 0.5s ease;
-}
+    /* Offscreen Canvas nur für A11y verstecken */
+    canvas#shareCanvas { position: absolute; left: -9999px; top: -9999px; }
   </style>
 </head>
 <body>
   <header>
     <h1>Schwabe oder Bade? – Der JuLi-Persönlichkeitstest</h1>
   </header>
-  <div class="container" id="quiz"></div>
+
   <div class="container">
-    <button onclick="calculateResult()">Auswertung anzeigen</button>
+    <div id="quiz"></div>
+
+    <button id="evaluateBtn">Auswertung anzeigen</button>
     <div id="result"></div>
+
     <div class="scale-container" id="scaleContainer" style="display: none;">
-        <div class="scale-labels">
-          <span>Ganz klar Badener</span>
-          <span>Ausgewogen</span>
-          <span>Ganz klar Schwabe</span>
-        </div>
-        <div class="scale-bar">
-          <div class="scale-fill" id="scaleFill"></div>
-        </div>
+      <div class="scale-labels">
+        <span>Ganz klar Badener</span>
+        <span>Ausgewogen</span>
+        <span>Ganz klar Schwabe</span>
       </div>
+      <div class="scale-bar">
+        <div class="scale-fill" id="scaleFill"></div>
+      </div>
+    </div>
+
+    <!-- Share / Kachel -->
+    <div class="share-controls">
+      <select id="imgSize">
+        <option value="1080x1080">Quadrat 1080×1080</option>
+        <option value="1080x1350" selected>Porträt 1080×1350</option>
+      </select>
+      <select id="imgFormat">
+        <option value="png" selected>PNG</option>
+        <option value="jpeg">JPG</option>
+      </select>
+      <button id="makeImageBtn" disabled>Bild erstellen</button>
+    </div>
+    <canvas id="shareCanvas" width="1080" height="1350" aria-hidden="true"></canvas>
   </div>
-  
 
   <script>
-    const questions = [
-      { text: "'Schaffe, schaffe, Häusle baue' ist mein Lebensmotto.", type: "schwabe" },
+    // --- Fragenpool ---
+    const QUESTIONS_POOL = [
+      { text: "'Schaffâ, schaffâ, Häusle bauâ,' ist mein Lebensmotto.", type: "schwabe" },
       { text: "Ich spare an allen Ecken und Enden – Geiz ist schließlich geil.", type: "schwabe" },
       { text: "Die Kehrwoche ist mir heilig: Sauberkeit rund ums Haus muss sein.", type: "schwabe" },
       { text: "Spätzle und Maultaschen könnte ich jeden Tag essen – alles andere ist für mich Beilage.", type: "schwabe" },
       { text: "Ich hänge an fast jedes Wort ein '-le' dran.", type: "schwabe" },
       { text: "Ordnung muss sein: Bei mir hat jedes Ding seinen festen Platz.", type: "schwabe" },
+      { text: "Zum Ausflug nehme ich lieber mein eigenes Vesper mit.", type: "schwabe" },
+      { text: "Für ein gutes Sonderangebot fahre ich auch mal 10 km Umweg.", type: "schwabe" },
+      { text: "Luxus brauche ich nicht – Hauptsache, es erfüllt seinen Zweck.", type: "schwabe" },
+
       { text: "Ich liebe laue Sommerabende bei einem Glas Weißwein.", type: "bade" },
       { text: "Fasnacht ist für mich ein Höhepunkt des Jahres.", type: "bade" },
       { text: "Ich genieße mein Leben gern in vollen Zügen – Arbeit darf nicht alles sein.", type: "bade" },
       { text: "Ich genieße Lebensfreuden und bin immer locker drauf.", type: "bade" },
       { text: "Ich bade lieber in der Sonne als im Terminkalender.", type: "bade" },
       { text: "Ein gutes Viertele ist mir lieber als ein Sparkonto.", type: "bade" },
-      { text: "Zum Ausflug nehme ich lieber mein eigenes Vesper mit.", type: "schwabe" },
-      { text: "Für ein gutes Sonderangebot fahre ich auch mal 10 km Umweg.", type: "schwabe" },
-      { text: "Luxus brauche ich nicht – Hauptsache, es erfüllt seinen Zweck.", type: "schwabe" },
+      { text: "Ich verabschiede mich mit 'Ade', nicht mit 'Tschüss' oder 'Ciao'.", type: "bade" },
+
       { text: "Urlaub im Ländle ist doch am schönsten.", type: "neutral" },
-      { text: "Ich verabschiede mich mit 'Ade', nicht mit 'Tschüss' oder 'Ciao'.", type: "bade" }
+
+      { text: "Ich plane Anschaffungen mit Excel und Preisverlauf – Spontankäufe sind mir suspekt.", type: "schwabe" },
+      { text: "Heimatgefühle werden bei mir erst mit Grünkern und Trollinger so richtig wach.", type: "bade" },
+      { text: "Wenn ich an Sonntag denke, denke ich an Zwiebelrostbraten.", type: "schwabe" },
+      { text: "'Hock' ich gern – am liebsten im Straßencafé oder auf dem Weinfest.", type: "bade" },
+      { text: "Ich finde: 'Net g’schwätzt ist g’lobt g’nug.'", type: "schwabe" },
+      { text: "Bei 'Narri Narro' bin ich sofort im Modus.", type: "bade" },
+      { text: "Ordnung im Keller ist wichtiger als Deko im Wohnzimmer.", type: "schwabe" },
+      { text: "Ich habe eine feste Meinung zur richtigen Soße zu Käsespätzle.", type: "schwabe" },
+      { text: "Wenn Besuch kommt, gibt’s erst mal ein Viertele und was zum Vespern.", type: "bade" },
+      { text: "Regionale Feste und Hocks sind Pflichttermine.", type: "bade" },
+      { text: "Ich finde Schnäppchenjagd sportlich – und erzähle gern davon.", type: "schwabe" },
+      { text: "'Mir gfallt’s, wies isch' – Hauptsache gemütlich.", type: "bade" },
+      { text: "Ich bin pünktlich – fünf Minuten zu früh.", type: "schwabe" },
+      { text: "Ich lasse Fünfe gern grade sein, wenn die Sonne scheint.", type: "bade" },
+      { text: "Ein Gartenzwerg verleiht jedem Vorgarten Würde.", type: "schwabe" },
+      { text: "Südbaden ohne Wein? Unvorstellbar.", type: "bade" },
+      { text: "Ich zahle ungern fürs Parken – da laufe ich lieber zwei Straßen weiter.", type: "schwabe" },
+      { text: "Ich bin für Spontan-Feierabendtreffs zu haben.", type: "bade" },
+      { text: "Große Marken sind mir egal – Hauptsache, es hält.", type: "schwabe" },
+      { text: "Ich mag’s entspannt: 'Kommt scho, wird scho!'", type: "bade" },
+      { text: "Ich bleibe lieber daheim als für 'nen Aufpreis Komfort zu buchen.", type: "schwabe" },
+      { text: "Ich nehme mir Zeit für Genuss – Essen ist kein Wettkampf.", type: "bade" },
+      { text: "Kaffee und Kuchen am Sonntag – ohne Schnickschnack, aber zuverlässig.", type: "schwabe" },
+      { text: "Ich halte Smalltalk beim Bäcker für eine Kulturtechnik.", type: "bade" }
     ];
 
-    const values = [2, 1, 0, -1, -2];
+    const OPTION_VALUES = [2, 1, 0, -1, -2];
+    const OPTION_LABELS = ['Trifft zu', 'Trifft eher zu', 'Weder noch', 'Trifft eher nicht zu', 'Trifft nicht zu'];
 
-    const container = document.getElementById('quiz');
-    questions.forEach((q, i) => {
-      const div = document.createElement('div');
-      div.className = 'question';
-      div.innerHTML = `<p>${i + 1}. ${q.text}</p>`;
+    const quizEl = document.getElementById('quiz');
+    const resultEl = document.getElementById('result');
+    const scaleContainer = document.getElementById('scaleContainer');
+    const scaleFill = document.getElementById('scaleFill');
 
-      const options = ['Trifft zu', 'Trifft eher zu', 'Weder noch', 'Trifft eher nicht zu', 'Trifft nicht zu'];
-      const group = document.createElement('div');
-      group.className = 'options';
+    const makeImageBtn = document.getElementById('makeImageBtn');
+    const imgSizeSel = document.getElementById('imgSize');
+    const imgFormatSel = document.getElementById('imgFormat');
+    const shareCanvas = document.getElementById('shareCanvas');
+    const ctx = shareCanvas.getContext('2d');
 
-      options.forEach((text, idx) => {
-        const id = `q${i}_${idx}`;
-        group.innerHTML += `
-          <label><input type="radio" name="q${i}" value="${values[idx]}" data-type="${q.type}" id="${id}"> ${text}</label>
-        `;
+    let lastResult = null; // {score, label, percent, total}
+
+    // --- Utils ---
+    function shuffle(arr) {
+      const a = arr.slice();
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    }
+
+    function buildQuiz() {
+      quizEl.innerHTML = '';
+      resultEl.textContent = '';
+      scaleContainer.style.display = 'none';
+      makeImageBtn.disabled = true;
+      lastResult = null;
+
+      const selected = shuffle(QUESTIONS_POOL).slice(0, 25); // immer 25 Fragen
+
+      selected.forEach((q, i) => {
+        const div = document.createElement('div');
+        div.className = 'question';
+        div.innerHTML = `<p>${i + 1}. ${q.text}</p>`;
+
+        const group = document.createElement('div');
+        group.className = 'options';
+
+        OPTION_LABELS.forEach((label, idx) => {
+          const id = `q${i}_${idx}`;
+          group.innerHTML += `
+            <label>
+              <input type="radio" name="q${i}" value="${OPTION_VALUES[idx]}" data-type="${q.type}" id="${id}">
+              ${label}
+            </label>
+          `;
+        });
+
+        div.appendChild(group);
+        quizEl.appendChild(div);
       });
-
-      div.appendChild(group);
-      container.appendChild(div);
-    });
+    }
 
     function calculateResult() {
       let score = 0;
       const inputs = document.querySelectorAll('input[type="radio"]:checked');
       inputs.forEach(input => {
-        let val = parseInt(input.value);
+        let val = parseInt(input.value, 10);
         const type = input.getAttribute('data-type');
-        if (type === 'bade') val = val * -1;
+        if (type === 'bade') val *= -1;
         if (type === 'neutral') val = 0;
         score += val;
       });
 
+      // Für 25 Fragen: Range [-50, +50]
+      const percent = ((score + 50) / 100) * 100;
+      scaleContainer.style.display = "block";
+      scaleFill.style.width = `${Math.max(0, Math.min(100, percent))}%`;
+
       let resultText = '';
-      if (score >= 16) {
+      if (score >= 20) {
         resultText = 'Ganz klar Schwabe – Schaffe, schaffe, bis zum Schluss!';
       } else if (score >= 6) {
         resultText = 'Tendenz zum Schwaben – Du hast das Häusle schon vor Augen.';
       } else if (score >= -5) {
         resultText = 'Ausgewogen – Du bist eine seltene Mischung aus Spätzle und Wein!';
-      } else if (score >= -15) {
+      } else if (score >= -19) {
         resultText = 'Tendenz zum Badener – Lieber genießen als schaffe!';
       } else {
         resultText = 'Ganz klar Badener – Genussmensch mit Herz und Humor!';
       }
-      document.getElementById("scaleContainer").style.display = "block";
 
-        // Skalenwert berechnen und setzen
-        const percent = ((score + 30) / 60) * 100;
-        document.getElementById("scaleFill").style.width = `${percent}%`;
-
-      document.getElementById('result').innerText = `Dein Ergebnis: ${resultText}`;
+      resultEl.textContent = `Dein Ergebnis: ${resultText}`;
+      lastResult = { score, label: resultText, percent: Math.round(percent), total: 25 };
+      makeImageBtn.disabled = false;
     }
+
+    // Text umbrechen für Canvas
+    function drawWrappedText(ctx, text, x, y, maxWidth, lineHeight) {
+      const words = text.split(' ');
+      let line = '';
+      for (let n = 0; n < words.length; n++) {
+        const testLine = line + words[n] + ' ';
+        const metrics = ctx.measureText(testLine);
+        if (metrics.width > maxWidth && n > 0) {
+          ctx.fillText(line, x, y);
+          line = words[n] + ' ';
+          y += lineHeight;
+        } else {
+          line = testLine;
+        }
+      }
+      ctx.fillText(line, x, y);
+      return y; // letzte y-Position
+    }
+
+    function setCanvasSizeFromSelect() {
+      const val = imgSizeSel.value;
+      const [w, h] = val.split('x').map(Number);
+      shareCanvas.width = w;
+      shareCanvas.height = h;
+    }
+
+    function generateShareImage() {
+      if (!lastResult) return;
+
+      setCanvasSizeFromSelect();
+      const W = shareCanvas.width;
+      const H = shareCanvas.height;
+
+      // Hintergrund: diagonaler Verlauf JuLis-Farben
+      const grad = ctx.createLinearGradient(0, 0, W, H);
+      grad.addColorStop(0, '#E6007E'); // Magenta
+      grad.addColorStop(0.5, '#FFD500'); // Gelb
+      grad.addColorStop(1, '#005BAC'); // Blau
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, W, H);
+
+      // Halbtransparente Overlay-Fläche für Lesbarkeit
+      ctx.fillStyle = 'rgba(255,255,255,0.9)';
+      const pad = Math.round(W * 0.06);
+      const boxW = W - 2 * pad;
+      const boxH = H - 2 * pad;
+      const radius = Math.max(16, Math.floor(W * 0.03));
+      roundRect(ctx, pad, pad, boxW, boxH, radius);
+      ctx.fill();
+
+      // Kopfzeile
+      ctx.fillStyle = '#E6007E';
+      ctx.font = Math.round(W * 0.07) + "px Segoe UI, Tahoma, sans-serif";
+      ctx.textBaseline = 'top';
+      const title = 'Schwabe oder Bade?';
+      const titleW = ctx.measureText(title).width;
+      ctx.fillText(title, pad + (boxW - titleW)/2, pad + Math.round(W*0.02));
+
+      // Untertitel
+      ctx.fillStyle = '#333';
+      ctx.font = Math.round(W * 0.035) + "px Segoe UI, Tahoma, sans-serif";
+      const subtitle = 'Dein JuLi-Persönlichkeitstest';
+      const subY = pad + Math.round(W*0.02) + Math.round(W * 0.09);
+      const subW = ctx.measureText(subtitle).width;
+      ctx.fillText(subtitle, pad + (boxW - subW)/2, subY);
+
+      // Ergebnis-Badge
+      const badgeY = subY + Math.round(W * 0.08);
+      const badgeH = Math.round(W * 0.18);
+      const badgePad = Math.round(W * 0.04);
+      ctx.fillStyle = '#FFD500';
+      roundRect(ctx, pad + badgePad, badgeY, boxW - 2*badgePad, badgeH, Math.round(badgeH*0.2));
+      ctx.fill();
+
+      // Ergebnis-Text in Badge
+      ctx.fillStyle = '#005BAC';
+      ctx.font = Math.round(W * 0.05) + "px Segoe UI Black, Segoe UI, sans-serif";
+      ctx.textBaseline = 'middle';
+      const label = lastResult.label;
+      const labelX = pad + badgePad + Math.round(W*0.03);
+      const labelY = badgeY + badgeH/2;
+      drawWrappedText(ctx, label, labelX, labelY - Math.round(W*0.02), boxW - 2*badgePad - Math.round(W*0.06), Math.round(W*0.06));
+
+      // Skala (Badener ↔ Schwabe)
+      const scaleTop = badgeY + badgeH + Math.round(W * 0.10);
+      const scaleH = Math.round(W * 0.035);
+      const scaleW = boxW - Math.round(W*0.08);
+      const scaleX = pad + Math.round(W*0.04);
+      ctx.fillStyle = '#ddd';
+      roundRect(ctx, scaleX, scaleTop, scaleW, scaleH, scaleH/2);
+      ctx.fill();
+
+      // Füllung
+      const fillW = Math.max(0, Math.min(scaleW, Math.round(scaleW * (lastResult.percent/100))));
+      const grad2 = ctx.createLinearGradient(scaleX, scaleTop, scaleX + scaleW, scaleTop);
+      grad2.addColorStop(0, '#f44336');
+      grad2.addColorStop(0.5, '#ffd500');
+      grad2.addColorStop(1, '#005bac');
+      ctx.fillStyle = grad2;
+      roundRect(ctx, scaleX, scaleTop, fillW, scaleH, scaleH/2);
+      ctx.fill();
+
+      // Skalen-Labels
+      ctx.fillStyle = '#555';
+      ctx.font = Math.round(W * 0.03) + "px Segoe UI, Tahoma, sans-serif";
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillText('Ganz klar Badener', scaleX, scaleTop - Math.round(W*0.01));
+      const schwTxt = 'Ganz klar Schwabe';
+      const schwW = ctx.measureText(schwTxt).width;
+      ctx.fillText(schwTxt, scaleX + scaleW - schwW, scaleTop - Math.round(W*0.01));
+
+      // Score-Info
+      ctx.fillStyle = '#333';
+      ctx.font = Math.round(W * 0.035) + "px Segoe UI, Tahoma, sans-serif";
+      const scoreStr = `Score: ${lastResult.score} von ±${lastResult.total*2}  •  Position: ${lastResult.percent}%`;
+      const infoY = scaleTop + scaleH + Math.round(W * 0.06);
+      drawWrappedText(ctx, scoreStr, scaleX, infoY, scaleW, Math.round(W*0.05));
+
+      // Footer / Branding
+      const date = new Date();
+      const iso = date.toISOString().slice(0,10);
+      ctx.fillStyle = '#999';
+      ctx.font = Math.round(W * 0.028) + "px Segoe UI, Tahoma, sans-serif";
+      const footerL = `JuLis – Baden-Württemberg  •  ${iso}`;
+      const footerR = `julis-bw.de`;
+      ctx.textBaseline = 'bottom';
+      ctx.fillText(footerL, scaleX, H - pad - Math.round(W*0.01));
+      const rW = ctx.measureText(footerR).width;
+      ctx.fillText(footerR, scaleX + scaleW - rW, H - pad - Math.round(W*0.01));
+
+      // Export
+      const ext = imgFormatSel.value === 'jpeg' ? 'jpeg' : 'png';
+      const mime = ext === 'jpeg' ? 'image/jpeg' : 'image/png';
+      const quality = ext === 'jpeg' ? 0.92 : 1.0;
+      const dataURL = shareCanvas.toDataURL(mime, quality);
+
+      const slug = label.toLowerCase()
+        .replace(/[^a-zäöüß\s-]/g, '')
+        .replace(/\s+/g, '_')
+        .replace(/ä/g,'ae').replace(/ö/g,'oe').replace(/ü/g,'ue').replace(/ß/g,'ss');
+      const filename = `juli-test_${slug}_${iso}.${ext}`;
+
+      const a = document.createElement('a');
+      a.href = dataURL;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+
+    function roundRect(ctx, x, y, w, h, r) {
+      const min = Math.min(w, h) / 2;
+      r = Math.min(r, min);
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y, x + w, y + h, r);
+      ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r);
+      ctx.arcTo(x, y, x + w, y, r);
+      ctx.closePath();
+    }
+
+    // Events
+    document.getElementById('evaluateBtn').addEventListener('click', calculateResult);
+    document.getElementById('makeImageBtn').addEventListener('click', generateShareImage);
+    imgSizeSel.addEventListener('change', () => { /* Größe wird beim Rendern gesetzt */ });
+
+    // Init
+    buildQuiz();
   </script>
 </body>
 </html>
