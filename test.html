@@ -5,11 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Schwabe oder Bade? - Der JuLi-Test</title>
   <style>
+    @font-face {
+      font-family: 'Anybody';
+      src: url('./anybody.ttf') format('truetype');
+      font-style: normal;
+    }
+
     :root {
       --julis-magenta: #E6007E;
-      --julis-yellow: #ffd500;
-      --julis-blue: #005bac;
-      --font: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      --julis-yellow: #ffed00;
+      --julis-blue: #009EE3;
+      --font: 'Anybody', sans-serif;
     }
 
     body {
@@ -74,7 +80,7 @@
     }
     .scale-fill {
       height: 100%; width: 50%;
-      background: linear-gradient(to right, #f44336, #ffd500, #005bac);
+      background: linear-gradient(to right, #E6007E);
       transition: width 0.4s ease;
     }
 
@@ -86,6 +92,15 @@
       border: 2px solid var(--julis-magenta);
       border-radius: 0.8em; padding: .5rem .75rem;
       color: var(--julis-magenta); background: #fff;
+      font-weight: 600;
+    }
+
+    .share-controls input[type="file"] {
+      border: 2px solid var(--julis-magenta);
+      border-radius: 0.8em;
+      padding: .35rem .5rem;
+      color: var(--julis-magenta);
+      background: #fff;
       font-weight: 600;
     }
 
@@ -106,7 +121,7 @@
 
     <div class="scale-container" id="scaleContainer" style="display: none;">
       <div class="scale-labels">
-        <span>Ganz klar Badener</span>
+        <span>Ganz klar Badner</span>
         <span>Ausgewogen</span>
         <span>Ganz klar Schwabe</span>
       </div>
@@ -119,15 +134,16 @@
     <div class="share-controls">
       <select id="imgSize">
         <option value="1080x1080">Quadrat 1080×1080</option>
-        <option value="1080x1350" selected>Porträt 1080×1350</option>
+        <option value="1080x1920" selected>Porträt 1080×1920</option>
       </select>
       <select id="imgFormat">
         <option value="png" selected>PNG</option>
         <option value="jpeg">JPG</option>
       </select>
+      <input type="file" id="imgUpload" accept="image/*">
       <button id="makeImageBtn" disabled>Bild erstellen</button>
     </div>
-    <canvas id="shareCanvas" width="1080" height="1350" aria-hidden="true"></canvas>
+    <canvas id="shareCanvas" width="1080" height="1980" aria-hidden="true"></canvas>
   </div>
 
   <script>
@@ -195,6 +211,55 @@
 
     let lastResult = null; // {score, label, percent, total}
 
+    let userImage = null;
+    let userImageObjectURL = null;
+
+    const imgUpload = document.getElementById('imgUpload');
+
+    imgUpload.addEventListener('change', (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) {
+        userImage = null;
+        if (userImageObjectURL) URL.revokeObjectURL(userImageObjectURL);
+        userImageObjectURL = null;
+        return;
+      }
+      if (userImageObjectURL) URL.revokeObjectURL(userImageObjectURL);
+      userImageObjectURL = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        userImage = img;
+      };
+      img.onerror = () => {
+        userImage = null;
+        alert('Bild konnte nicht geladen werden.');
+      };
+      img.src = userImageObjectURL;
+    });
+
+    function drawImageCover(ctx, img, dx, dy, dWidth, dHeight) {
+      const iw = img.naturalWidth || img.width;
+      const ih = img.naturalHeight || img.height;
+      const ir = iw / ih;
+      const dr = dWidth / dHeight;
+
+      let sx, sy, sWidth, sHeight;
+      if (ir > dr) {
+        // Bild ist „breiter“ → oben/unten voll, links/rechts abgeschnitten
+        sHeight = ih;
+        sWidth  = ih * dr;
+        sx = (iw - sWidth) / 2;
+        sy = 0;
+      } else {
+        // Bild ist „höher“ → links/rechts voll, oben/unten abgeschnitten
+        sWidth  = iw;
+        sHeight = iw / dr;
+        sx = 0;
+        sy = (ih - sHeight) / 2;
+      }
+      ctx.drawImage(img, sx, sy, sWidth, sHeight, dx, dy, dWidth, dHeight);
+    }
+
     // --- Utils ---
     function shuffle(arr) {
       const a = arr.slice();
@@ -261,9 +326,9 @@
       } else if (score >= -5) {
         resultText = 'Ausgewogen – Du bist eine seltene Mischung aus Spätzle und Wein!';
       } else if (score >= -19) {
-        resultText = 'Tendenz zum Badener – Lieber genießen als schaffe!';
+        resultText = 'Tendenz zum Badner – Lieber genießen als schaffe!';
       } else {
-        resultText = 'Ganz klar Badener – Genussmensch mit Herz und Humor!';
+        resultText = 'Ganz klar Badner – Genussmensch mit Herz und Humor!';
       }
 
       resultEl.textContent = `Dein Ergebnis: ${resultText}`;
@@ -298,6 +363,7 @@
     }
 
     function generateShareImage() {
+
       if (!lastResult) return;
 
       setCanvasSizeFromSelect();
@@ -307,8 +373,6 @@
       // Hintergrund: diagonaler Verlauf JuLis-Farben
       const grad = ctx.createLinearGradient(0, 0, W, H);
       grad.addColorStop(0, '#E6007E'); // Magenta
-      grad.addColorStop(0.5, '#FFD500'); // Gelb
-      grad.addColorStop(1, '#005BAC'); // Blau
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, W, H);
 
@@ -323,7 +387,7 @@
 
       // Kopfzeile
       ctx.fillStyle = '#E6007E';
-      ctx.font = Math.round(W * 0.07) + "px Segoe UI, Tahoma, sans-serif";
+      ctx.font = Math.round(W * 0.07) + "px Anybody, sans-serif";
       ctx.textBaseline = 'top';
       const title = 'Schwabe oder Bade?';
       const titleW = ctx.measureText(title).width;
@@ -331,23 +395,23 @@
 
       // Untertitel
       ctx.fillStyle = '#333';
-      ctx.font = Math.round(W * 0.035) + "px Segoe UI, Tahoma, sans-serif";
-      const subtitle = 'Dein JuLi-Persönlichkeitstest';
+      ctx.font = Math.round(W * 0.035) + "px Anybody, Tahoma, sans-serif";
+      const subtitle = 'Dein Persönlichkeitstest';
       const subY = pad + Math.round(W*0.02) + Math.round(W * 0.09);
       const subW = ctx.measureText(subtitle).width;
       ctx.fillText(subtitle, pad + (boxW - subW)/2, subY);
 
       // Ergebnis-Badge
       const badgeY = subY + Math.round(W * 0.08);
-      const badgeH = Math.round(W * 0.18);
+      const badgeH = Math.round(W * 0.33);
       const badgePad = Math.round(W * 0.04);
-      ctx.fillStyle = '#FFD500';
+      ctx.fillStyle = '#ffed00';
       roundRect(ctx, pad + badgePad, badgeY, boxW - 2*badgePad, badgeH, Math.round(badgeH*0.2));
       ctx.fill();
 
       // Ergebnis-Text in Badge
-      ctx.fillStyle = '#005BAC';
-      ctx.font = Math.round(W * 0.05) + "px Segoe UI Black, Segoe UI, sans-serif";
+      ctx.fillStyle = '#009EE3';
+      ctx.font = Math.round(W * 0.05) + "px Anybody, Segoe UI, sans-serif";
       ctx.textBaseline = 'middle';
       const label = lastResult.label;
       const labelX = pad + badgePad + Math.round(W*0.03);
@@ -366,34 +430,64 @@
       // Füllung
       const fillW = Math.max(0, Math.min(scaleW, Math.round(scaleW * (lastResult.percent/100))));
       const grad2 = ctx.createLinearGradient(scaleX, scaleTop, scaleX + scaleW, scaleTop);
-      grad2.addColorStop(0, '#f44336');
-      grad2.addColorStop(0.5, '#ffd500');
-      grad2.addColorStop(1, '#005bac');
+      grad2.addColorStop(0, '#E6007E');
       ctx.fillStyle = grad2;
       roundRect(ctx, scaleX, scaleTop, fillW, scaleH, scaleH/2);
       ctx.fill();
 
       // Skalen-Labels
       ctx.fillStyle = '#555';
-      ctx.font = Math.round(W * 0.03) + "px Segoe UI, Tahoma, sans-serif";
+      ctx.font = Math.round(W * 0.03) + "px Anybody, Tahoma, sans-serif";
       ctx.textBaseline = 'alphabetic';
-      ctx.fillText('Ganz klar Badener', scaleX, scaleTop - Math.round(W*0.01));
+      ctx.fillText('Ganz klar Badner', scaleX, scaleTop - Math.round(W*0.01));
       const schwTxt = 'Ganz klar Schwabe';
       const schwW = ctx.measureText(schwTxt).width;
       ctx.fillText(schwTxt, scaleX + scaleW - schwW, scaleTop - Math.round(W*0.01));
 
       // Score-Info
       ctx.fillStyle = '#333';
-      ctx.font = Math.round(W * 0.035) + "px Segoe UI, Tahoma, sans-serif";
+      ctx.font = Math.round(W * 0.035) + "px Anybody, Tahoma, sans-serif";
       const scoreStr = `Score: ${lastResult.score} von ±${lastResult.total*2}  •  Position: ${lastResult.percent}%`;
       const infoY = scaleTop + scaleH + Math.round(W * 0.06);
       drawWrappedText(ctx, scoreStr, scaleX, infoY, scaleW, Math.round(W*0.05));
+
+      if (imgSizeSel.value === '1080x1920' && userImage) {
+        // Avatar mittig unter Score
+        const avatarD = Math.round(W * 0.75); // Durchmesser, etwas größer als vorher
+        const centerX = pad + boxW / 2;
+        const avatarX = centerX - avatarD / 2;
+
+        const avatarY = infoY + Math.round(W * 0.12);
+
+        // weißer Ring-Hintergrund (Rahmen)
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(centerX, avatarY + avatarD/2, avatarD/2 + Math.round(W*0.01), 0, Math.PI*2);
+        ctx.fillStyle = '#fff';
+        ctx.fill();
+
+        // runde Maske für das Foto
+        ctx.beginPath();
+        ctx.arc(centerX, avatarY + avatarD/2, avatarD/2, 0, Math.PI*2);
+        ctx.clip();
+
+        // Bild als "cover" in den Kreis zeichnen
+        drawImageCover(ctx, userImage, avatarX, avatarY, avatarD, avatarD);
+        ctx.restore();
+
+        // farbiger Ring drumherum
+        ctx.beginPath();
+        ctx.arc(centerX, avatarY + avatarD/2, avatarD/2, 0, Math.PI*2);
+        ctx.lineWidth = Math.max(2, Math.round(W*0.006));
+        ctx.strokeStyle = '#E6007E';
+        ctx.stroke();
+      }
 
       // Footer / Branding
       const date = new Date();
       const iso = date.toISOString().slice(0,10);
       ctx.fillStyle = '#999';
-      ctx.font = Math.round(W * 0.028) + "px Segoe UI, Tahoma, sans-serif";
+      ctx.font = Math.round(W * 0.028) + "px Anybody, Tahoma, sans-serif";
       const footerL = `JuLis – Baden-Württemberg  •  ${iso}`;
       const footerR = `julis-bw.de`;
       ctx.textBaseline = 'bottom';
